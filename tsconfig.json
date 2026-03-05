@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/jobs"
+    },
+    {
+      "path": "./apps/auth"
+    },
+    {
+      "path": "./libs/nestjs"
+    },
+    {
+      "path": "./libs/pulsar"
+    },
+    {
+      "path": "./apps/executor"
+    },
+    {
+      "path": "./libs/proto"
+    },
+    {
+      "path": "./libs/graphql"
+    }
+  ]
+}

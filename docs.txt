@@ -1,0 +1,13 @@
+nx g @nx/node:application apps/auth
+nx g module prisma/prisma
+nx generate-prisma auth
+nx g @nx/node:lib libs/my-new-lib
+
+nx run-many -t serve -p auth jobss
+
+curl http://localhost:8080/admin/v2/brokers/health
+
+nx graph
+
+npm i --save nestjs-pino pino-http
+npm i --save-dev pino-pretty
