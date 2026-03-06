@@ -1,75 +1,85 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches:
       - main
   pull_request:
+    branches:
+      - main
 
 permissions:
-  actions: read
   contents: read
+  actions: read
 
 jobs:
-  main:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-north-1
+      ECR_ACCOUNT: 151136684861
+      ECR_REPO_PREFIX: jobber
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          filter: tree:0
           fetch-depth: 0
 
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      # Connect your workspace by running "nx connect" and uncomment this line to enable task distribution
-      # - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="build"
-
-      # Cache node_modules
-      - uses: actions/setup-node@v4
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - run: npm ci
-      - uses: nrwl/nx-set-shas@v4
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
+        run: npm ci
 
-      # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      # - run: npx nx record -- echo Hello World
-      - run: npx nx affected -t lint test build
+      # 4️⃣ Nx affected (lint, test, build)
+      - name: Nx affected tasks
+        run: npx nx affected -t lint test build
 
-      - name: configure AWS credentials
+      # 5️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
-          aws-region: eu-north-1
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
+      # 6️⃣ Login to Amazon ECR
+      - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 151136684861.dkr.ecr.eu-north-1.amazonaws.com
-      
-      - name: Build and push all images to ECR
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      # 7️⃣ Build and push Docker images
+      - name: Build and push Docker images
         run: |
+          set -e
           IMAGES=(
             "jobs apps/jobs/Dockerfile"
             "executor apps/executor/Dockerfile"
             "auth apps/auth/Dockerfile"
           )
-          
+          TAG=$(echo $GITHUB_SHA | cut -c1-7)
+
           for image in "${IMAGES[@]}"; do
             NAME=$(echo $image | cut -d' ' -f1)
             DOCKERFILE=$(echo $image | cut -d' ' -f2)
-
-            {
-              docker build \
-                --tag 151136684861.dkr.ecr.eu-north-1.amazonaws.com/jobber/$NAME:latest \
-                -f $DOCKERFILE \
-                . && docker push 151136684861.dkr.ecr.eu-north-1.amazonaws.com/jobber/$NAME:latest
-            } &
+            
+            echo "Building $NAME..."
+            docker build -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest \
+                         -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG \
+                         -f $DOCKERFILE .
+            
+            echo "Pushing $NAME..."
+            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest
+            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG
           done
 
-
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
-      - run: npx nx fix-ci
+      # 8️⃣ Nx Cloud CI fixes (optionnel)
+      - name: Nx CI self-heal
+        run: npx nx fix-ci
         if: always()
