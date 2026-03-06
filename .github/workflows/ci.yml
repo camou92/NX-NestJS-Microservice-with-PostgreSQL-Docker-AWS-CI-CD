@@ -37,6 +37,39 @@ jobs:
       # Prepend any command with "nx record --" to record its logs to Nx Cloud
       # - run: npx nx record -- echo Hello World
       - run: npx nx affected -t lint test build
+
+      - name: configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: us-east-1
+
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 151136684861.dkr.ecr.eu-north-1.amazonaws.com
+      
+      - name: Build and push all images to ECR
+        run: |
+          IMAGES=(
+            "jobs apps/jobs/Dockerfile"
+            "executor apps/executor/Dockerfile"
+            "auth apps/auth/Dockerfile"
+          )
+          
+          for image in "${IMAGES[@]}"; do
+            NAME=$(echo $image | cut -d' ' -f1)
+            DOCKERFILE=$(echo $image | cut -d' ' -f2)
+
+            {
+              docker build \
+                --tag 151136684861.dkr.ecr.eu-north-1.amazonaws.com/jobber/$NAME:latest \
+                -f $DOCKERFILE \
+                . && docker push 151136684861.dkr.ecr.eu-north-1.amazonaws.com/jobber/$NAME:latest
+            } &
+          done
+
+
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
       - run: npx nx fix-ci
         if: always()
