@@ -15,12 +15,14 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     env:
       AWS_REGION: eu-north-1
-      ECR_ACCOUNT: 091708608610
       ECR_REPO_PREFIX: jobber
+
     steps:
-      # 1️⃣ Checkout code
+
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -31,7 +33,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
       # 3️⃣ Install dependencies
       - name: Install dependencies
@@ -49,37 +51,48 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 6️⃣ Login to Amazon ECR
-      - name: Login to Amazon ECR
+      # 6️⃣ Get AWS Account ID
+      - name: Get AWS Account ID
+        id: aws-account
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
 
-      # 7️⃣ Build and push Docker images
+      # 7️⃣ Login to Amazon ECR
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 8️⃣ Build and push Docker images
       - name: Build and push Docker images
         run: |
           set -e
+
           IMAGES=(
             "jobs apps/jobs/Dockerfile"
             "executor apps/executor/Dockerfile"
             "auth apps/auth/Dockerfile"
           )
+
           TAG=$(echo $GITHUB_SHA | cut -c1-7)
 
           for image in "${IMAGES[@]}"; do
             NAME=$(echo $image | cut -d' ' -f1)
             DOCKERFILE=$(echo $image | cut -d' ' -f2)
-            
+
             echo "Building $NAME..."
-            docker build -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest \
-                         -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG \
-                         -f $DOCKERFILE .
-            
+
+            docker build \
+              -t $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest \
+              -t $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG \
+              -f $DOCKERFILE .
+
             echo "Pushing $NAME..."
-            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest
-            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG
+
+            docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:latest
+            docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_PREFIX/$NAME:$TAG
           done
 
-      # 8️⃣ Nx Cloud CI fixes (optionnel)
+      # 9️⃣ Nx Cloud fix (optionnel)
       - name: Nx CI self-heal
-        run: npx nx fix-ci
         if: always()
+        run: npx nx fix-ci
