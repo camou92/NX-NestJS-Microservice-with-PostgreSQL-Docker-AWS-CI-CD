@@ -1,4 +1,6 @@
 nx g @nx/node:application apps/auth
+npx create-nx-workspace --preset nest --name jobber --appName jobber-auth
+
 nx g module prisma/prisma
 nx generate-prisma auth
 nx g @nx/node:lib libs/my-new-lib
@@ -11,3 +13,26 @@ nx graph
 
 npm i --save nestjs-pino pino-http
 npm i --save-dev pino-pretty
+
+helm install jobber . -n jobber --create-namespace
+
+voir les releases: helm list -n jobber
+
+Mettre à jour la release
+
+Si tu modifies le chart :
+
+helm upgrade jobber .
+🔟 Supprimer la release
+helm uninstall jobber -n jobber
+
+minikube addons list | grep registry-creds
+
+minikube addons configure registry-creds
+
+
+docker build --no-cache -t jobber/jobs:latest .
+
+docker builder prune -a
+docker system prune -af
+docker image prune -af
