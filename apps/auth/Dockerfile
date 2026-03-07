@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y protobuf-compiler
 RUN npx nx sync
 
 # Builder l'application auth
-RUN npx nx build auth --configuration=production
+RUN npx nx run-many --target=build --all --configuration=production
 
 # ---------- RUNTIME STAGE ----------
 FROM node:20-slim AS runner
