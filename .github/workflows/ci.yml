@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: eu-north-1
-      ECR_ACCOUNT: 151136684861
+      ECR_ACCOUNT: 091708608610
       ECR_REPO_PREFIX: jobber
     steps:
       # 1️⃣ Checkout code
